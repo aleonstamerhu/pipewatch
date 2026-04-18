@@ -1,60 +1,58 @@
-"""Metric collection and in-memory storage for pipeline metrics."""
-
+"""Metrics collector for pipewatch."""
+from collections import deque
+from typing import Dict, Deque, Optional, List
 from datetime import datetime
-from typing import Dict, List, Optional
-
-from pipewatch.metrics import PipelineMetric, MetricStatus
+from pipewatch.metrics import PipelineMetric, compute_status
 
 
 class MetricsCollector:
-    """Collects and stores pipeline metrics in memory."""
+    """Collects and stores pipeline metric snapshots."""
 
-    def __init__(self, max_history: int = 100):
+    def __init__(self, max_history: int = 50):
         self._max_history = max_history
-        self._store: Dict[str, List[PipelineMetric]] = {}
+        self._store: Dict[str, Deque[PipelineMetric]] = {}
 
     def record(
         self,
-        pipeline_name: str,
-        rows_processed: int,
-        error_count: int,
-        duration_seconds: float,
-        max_errors: int = 0,
-        max_duration_seconds: float = 300.0,
+        pipeline_id: str,
+        duration_seconds: float = 0.0,
+        error_count: int = 0,
+        rows_processed: int = 0,
         timestamp: Optional[datetime] = None,
     ) -> PipelineMetric:
-        """Record a new metric entry and return the computed metric."""
+        """Record a new metric snapshot and return it."""
+        if timestamp is None:
+            timestamp = datetime.utcnow()
+        status = compute_status(duration_seconds=duration_seconds, error_count=error_count)
         metric = PipelineMetric(
-            pipeline_name=pipeline_name,
-            rows_processed=rows_processed,
-            error_count=error_count,
+            pipeline_id=pipeline_id,
+            timestamp=timestamp,
             duration_seconds=duration_seconds,
-            timestamp=timestamp or datetime.utcnow(),
+            error_count=error_count,
+            rows_processed=rows_processed,
+            status=status,
         )
-        metric.compute_status(max_errors=max_errors, max_duration_seconds=max_duration_seconds)
-
-        history = self._store.setdefault(pipeline_name, [])
-        history.append(metric)
-        if len(history) > self._max_history:
-            history.pop(0)
-
+        if pipeline_id not in self._store:
+            self._store[pipeline_id] = deque(maxlen=self._max_history)
+        self._store[pipeline_id].append(metric)
         return metric
 
-    def latest(self, pipeline_name: str) -> Optional[PipelineMetric]:
-        """Return the most recent metric for a pipeline."""
-        history = self._store.get(pipeline_name)
-        return history[-1] if history else None
+    def latest(self, pipeline_id: str) -> Optional[PipelineMetric]:
+        """Return the most recent metric for a pipeline, or None."""
+        queue = self._store.get(pipeline_id)
+        if not queue:
+            return None
+        return queue[-1]
 
-    def history(self, pipeline_name: str) -> List[PipelineMetric]:
+    def history(self, pipeline_id: str) -> List[PipelineMetric]:
         """Return full history for a pipeline."""
-        return list(self._store.get(pipeline_name, []))
+        return list(self._store.get(pipeline_id, []))
 
-    def all_pipelines(self) -> List[str]:
+    def pipelines(self) -> List[str]:
+        """Return all tracked pipeline IDs."""
         return list(self._store.keys())
 
-    def summary(self) -> Dict[str, str]:
-        """Return latest status for all tracked pipelines."""
-        return {
-            name: (self.latest(name).status.value if self.latest(name) else MetricStatus.UNKNOWN.value)
-            for name in self.all_pipelines()
-        }
+    def clear(self, pipeline_id: str) -> None:
+        """Clear history for a pipeline."""
+        if pipeline_id in self._store:
+            del self._store[pipeline_id]
