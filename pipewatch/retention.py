@@ -20,6 +20,11 @@ class RetentionPolicy:
         cutoff = now - timedelta(days=self.max_age_days)
         return entry.timestamp < cutoff
 
+    def cutoff_datetime(self, now: datetime = None) -> datetime:
+        """Return the earliest timestamp that would not be considered expired."""
+        now = now or datetime.utcnow()
+        return now - timedelta(days=self.max_age_days)
+
 
 def apply_retention(log: AuditLog, policy: RetentionPolicy, now: datetime = None) -> int:
     """Remove expired or excess entries. Returns number of entries removed."""
