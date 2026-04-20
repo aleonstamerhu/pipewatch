@@ -40,6 +40,15 @@ def test_status_command():
     assert "mypipe" in result.output
 
 
+def test_status_command_unknown_pipeline():
+    """Verify that requesting status for a non-existent pipeline exits with an error."""
+    runner = CliRunner()
+    with patch("pipewatch.cli._collector") as mock_col:
+        mock_col.latest.return_value = None
+        result = runner.invoke(cli, ["status", "nonexistent_pipe"])
+    assert result.exit_code != 0 or "not found" in result.output.lower()
+
+
 def test_list_command_no_pipelines():
     """Isolated test — uses fresh module state via patching."""
     runner = CliRunner()
