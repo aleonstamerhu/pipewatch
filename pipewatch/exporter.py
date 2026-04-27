@@ -24,25 +24,33 @@ def to_csv(metrics: List[PipelineMetric]) -> str:
     return buf.getvalue()
 
 
+def _prometheus_labels(m: PipelineMetric) -> str:
+    """Build a Prometheus label string for a metric, including pipeline_id and status."""
+    parts = [f'pipeline="{m.pipeline_id}"']
+    if hasattr(m, 'status') and m.status is not None:
+        parts.append(f'status="{m.status}"')
+    return ",".join(parts)
+
+
 def to_prometheus(metrics: List[PipelineMetric]) -> str:
     """Serialize metrics to Prometheus text exposition format."""
     lines = []
     lines.append("# HELP pipewatch_duration_seconds Pipeline run duration")
     lines.append("# TYPE pipewatch_duration_seconds gauge")
     for m in metrics:
-        label = f'pipeline="{m.pipeline_id}"'
+        label = _prometheus_labels(m)
         lines.append(f"pipewatch_duration_seconds{{{label}}} {m.duration_seconds}")
 
     lines.append("# HELP pipewatch_error_count Pipeline error count")
     lines.append("# TYPE pipewatch_error_count gauge")
     for m in metrics:
-        label = f'pipeline="{m.pipeline_id}"'
+        label = _prometheus_labels(m)
         lines.append(f"pipewatch_error_count{{{label}}} {m.error_count}")
 
     lines.append("# HELP pipewatch_rows_processed Rows processed by pipeline")
     lines.append("# TYPE pipewatch_rows_processed gauge")
     for m in metrics:
-        label = f'pipeline="{m.pipeline_id}"'
+        label = _prometheus_labels(m)
         lines.append(f"pipewatch_rows_processed{{{label}}} {m.rows_processed}")
 
     return "\n".join(lines) + "\n"
