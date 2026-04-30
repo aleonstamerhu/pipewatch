@@ -41,6 +41,27 @@ class TagStore:
         tag = tag.strip().lower()
         return sorted(p for p, tags in self._tags.items() if tag in tags)
 
+    def pipelines_with_all_tags(self, *tags: str) -> List[str]:
+        """Return sorted list of pipeline names that carry all of the given tags.
+
+        Args:
+            *tags: One or more tag strings. All must be present on a pipeline
+                   for it to be included in the result.
+
+        Returns:
+            Sorted list of matching pipeline names.
+
+        Raises:
+            ValueError: If no tags are provided.
+        """
+        if not tags:
+            raise ValueError("at least one tag must be provided")
+        normalised = {t.strip().lower() for t in tags}
+        return sorted(
+            p for p, pipeline_tags in self._tags.items()
+            if normalised.issubset(pipeline_tags)
+        )
+
     def all_tags(self) -> List[str]:
         """Return sorted list of all unique tags across all pipelines."""
         return sorted({t for tags in self._tags.values() for t in tags})
